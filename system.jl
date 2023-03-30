@@ -2,9 +2,19 @@ struct DynamicalSystem{Ft<:Function, Fo<:Function, Fs<:Function}
     transfer::Ft                    # transfer function
     output::Fo                      # output function
     sampling::Fs                    # sampling function
+    dim::Int
 end 
 
-function generate_trajectories(sys::DynamicalSystem, l::Int, n_samples::Int)
+struct ControlledDynamicalSystem{F<:Function}
+    system::DynamicalSystem
+    control::F
+end
+
+function generate_trajectories(
+    sys::DynamicalSystem, 
+    l::Int, 
+    n_samples::Int
+)
     x = zeros(Float64, (n_samples, l + 1, sys.dim))
     x[:, 1, :] = sys.sampling(n_samples)
 
@@ -23,66 +33,30 @@ function generate_trajectories(sys::DynamicalSystem, l::Int, n_samples::Int)
     y
 end
 
-# Examples
-function sturmian_system()
-    sturmian_dynamics(x::Vector{Float64}, θ::Irrational) = [mod(x[1] + θ, 2 * π)] 
-    sturmian_output(x::Vector{Float64}, θ::Irrational) = x[1] < θ ? 0 : 1
-    t = x -> sturmian_dynamics(x, Base.MathConstants.φ)
-    o = x -> sturmian_output(x, Base.MathConstants.φ)
-    function s(n_samples::Int)
-        res = zeros(n_samples, 1)
-        res[:, 1] = rand(Uniform(0, 2 * π), n_samples)
-        return res
-    end
-    DynamicalSystem(t, o, s)
-end
+function generate_trajectories(
+    cont_sys::ControlledDynamicalSystem, 
+    l::Int, 
+    n_samples::Int
+)
+    sys = cont_sys.system
 
-function switched_system()
-    switched_dynamics(x::Vector{F}, Σ::Vector{Matrix{F}}) where {F <: AbstractFloat} = Σ[rand(1:size(Σ)[1])] * x
-    function switched_output(x::Vector{F}, α::F)::Int where {F <: AbstractFloat}
-        nm = norm(x, 2)   
-        if nm > 2.
-            return 8
-        end
+    x = zeros(Float64, (n_samples, l + 1, sys.dim))
+    x[:, 1, :] = sys.sampling(n_samples)
 
-        # the following is just in case of numerical issue where 
-        #   | dot([sin(α), cos(α)], x) / nm | > 1 
-        # although it is not mathematically possible
-        cos_val = dot([sin(α), cos(α)], x) / nm
-        cos_val = abs(cos_val) > 1 ? sign(cos_val) : cos_val
-
-        θ = acos(cos_val)
-
-        if det([x[1] cos(α); x[2] sin(α)]) > 0
-            θ = θ
-        else
-            θ = 2 * π - θ
-        end
-        part = Int(θ ÷ (π / 2))
-        return norm(x, 2) > 1. ? part + 4 : part
+    y = zeros(Int, (n_samples, l + 1))
+    for sample = 1:n_samples
+        y[sample, 1] = sys.output(x[sample, 1, :])
     end
 
-    factor = 1
-    A1 = factor * [3^(1/2)/2 -1/2; 1/2 3^(1/2)/2]       # 30 degrees rotation matrix
-    A2 = factor * [1.02 0; 0 1/2]                       # contraction/extension matrix
-    Σ = [A1, A2]
-
-    α = π / 5
+    for i = 1:l
+        for sample = 1:n_samples
+            x[sample, i + 1, :] = (cont_sys.control)(x[sample, i, :])
+            x[sample, i + 1, :] = (sys.transfer)(x[sample, i + 1, :]) 
+            y[sample, i + 1] = (sys.output)(x[sample, i + 1, :])
+        end
+    end
     
-    t = x -> switched_dynamics(x, Σ)
-    o = x -> switched_output(x, α)
-
-    function s(n_samples::Int)
-        res = zeros(n_samples, 2)
-        alpha_vec = rand(Uniform(0, 2 * π), n_samples)
-        r_vec = 2 .* sqrt.(rand(Uniform(0, 1), n_samples))
-
-        res[:, 1] = r_vec .* sin.(alpha_vec)
-        res[:, 2] = r_vec .* cos.(alpha_vec)
-        return res
-    end
-
-    return DynamicalSystem(t, o, s)
+    y
 end
 
 function memory_system()
@@ -111,11 +85,28 @@ function memory_system()
     end
     function s(n_samples::Int)
         res = zeros(n_samples, 2)
-        res[:, 1] = rand(Uniform(0, 2), n_samples)
-        res[:, 2] = rand(Uniform(0, 1), n_samples)
+        res[:, 1] = rand(Distributions.Uniform(0, 2), n_samples)
+        res[:, 2] = rand(Distributions.Uniform(0, 1), n_samples)
         return res
     end
-    DynamicalSystem(t, o, s)
+    DynamicalSystem(t, o, s, 2)
+end
+
+function memory_system_mdp_controlled(
+    policy::Policy, 
+    states::Vector{Int}
+)
+    sys = memory_system()
+    function c(x::Vector{Float64})
+        for s = states
+            parsed_state = [parse(Int64, a) for a = string(s, base=10)]
+            if is_in_partition(parsed_state, x, sys)
+                x2 = (x[2] + action(policy, s)) % 1
+                return [x[1], x2]
+            end
+        end
+    end
+    return ControlledDynamicalSystem(sys, c)
 end
 
 # These functions are a mess, TODO clean !!
@@ -182,6 +173,22 @@ function query_memory_system(from::Vector{Int}, to::Vector{Int})::Float64
         return 0.
     end
 end
+
+function is_in_partition(
+    state::Vector{Int}, 
+    x::Vector{Float64}, 
+    sys::DynamicalSystem
+)
+    xp = copy(x)
+    for s = state
+        if sys.output(xp) != s 
+            return false
+        end
+        xp = sys.transfer(xp)
+    end
+    return true
+end
+
 
 
 

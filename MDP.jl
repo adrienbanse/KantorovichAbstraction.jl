@@ -1,11 +1,37 @@
-using POMDPs, QuickPOMDPs, POMDPModelTools, POMDPSimulators, QMDP
-using DiscreteValueIteration
+include(joinpath(@__DIR__, "Wasserstein.jl"))
+K = Wasserstein
+
+sys = K.memory_system()
 
 _actions = [0, 1/4, 1/2]
 _reward = function (s, a) return s == 0 ? 1. : 0. end
 _discount = .95
 
-function solve_MDP_abstraction(__states, __initial_probs, __transition)
+function compute_reward_system(samples, discount, reward)
+    N, L = size(samples)
+    global r_gat = 0
+    for n = 1:N
+        local r = 0
+        for l = 1:L
+            r += discount^(l - 1) * reward(samples[n, l], nothing)
+        end
+        r_gat += r
+    end
+    return r_gat / N
+end
+
+function print_policy(policy::Policy, states)
+    for s = states
+        println("For $s: $(action(policy, s))")
+    end
+end
+
+function solve_MDP_abstraction(
+    __states, 
+    __initial_probs, 
+    __transition;
+    verbose = false
+)
     m = QuickMDP(
         states = __states,
         actions = _actions,
@@ -17,12 +43,16 @@ function solve_MDP_abstraction(__states, __initial_probs, __transition)
     solver = ValueIterationSolver(max_iterations=10000)
     policy = solve(solver, m)
     w = 0
-    println("-- Result --")
-    for (i, s) = enumerate(states(m))
-        println("V($s) = $(value(policy, s))")
-        w += __initial_probs[i] * value(policy, s)
+
+    if verbose
+        println("-- Result --")
+        for (i, s) = enumerate(states(m))
+            println("V($s) = $(value(policy, s))")
+            w += __initial_probs[i] * value(policy, s)
+        end
     end
-    println("==> E(∑V(s)) = $(w)\n")
+
+    return policy
 end
 
 _states = [0, 1]
@@ -34,7 +64,13 @@ function _transition(s, a)
     )
     return res[s]
 end
-solve_MDP_abstraction(_states, _initial_probs, _transition)
+p = solve_MDP_abstraction(_states, _initial_probs, _transition)
+print_policy(p, _states)
+cont_sys = K.memory_system_mdp_controlled(p, _states)
+samples = K.generate_trajectories(cont_sys, 1000, 5000)
+println(
+    "Expected reward = $(compute_reward_system(samples, _discount, _reward))\n"
+)
 
 _states = [0, 10, 11]
 _initial_probs = [1/2, 1/16, 7/16]
@@ -54,7 +90,13 @@ function _transition(s, a)
     )
     return res[s]
 end
-solve_MDP_abstraction(_states, _initial_probs, _transition)
+p = solve_MDP_abstraction(_states, _initial_probs, _transition)
+print_policy(p, _states)
+cont_sys = K.memory_system_mdp_controlled(p, _states)
+samples = K.generate_trajectories(cont_sys, 1000, 5000)
+println(
+    "Expected reward = $(compute_reward_system(samples, _discount, _reward))\n"
+)
 
 _states = [0, 10, 110, 111]
 _initial_probs = [1/2, 1/16, 1/16, 3/8]
@@ -87,7 +129,13 @@ function _transition(s, a)
         return res[s]
     end
 end
-solve_MDP_abstraction(_states, _initial_probs, _transition)
+p = solve_MDP_abstraction(_states, _initial_probs, _transition)
+print_policy(p, _states)
+cont_sys = K.memory_system_mdp_controlled(p, _states)
+samples = K.generate_trajectories(cont_sys, 1000, 5000)
+println(
+    "Expected reward = $(compute_reward_system(samples, _discount, _reward))\n"
+)
 
 _states = [0, 10, 110, 1110, 1111]
 _initial_probs = [1/2, 1/16, 1/16, 1/8, 2/8]
@@ -123,4 +171,10 @@ function _transition(s, a)
         return res[s]
     end
 end
-solve_MDP_abstraction(_states, _initial_probs, _transition)
+p = solve_MDP_abstraction(_states, _initial_probs, _transition)
+print_policy(p, _states)
+cont_sys = K.memory_system_mdp_controlled(p, _states)
+samples = K.generate_trajectories(cont_sys, 1000, 5000)
+println(
+    "Expected reward = $(compute_reward_system(samples, _discount, _reward))\n"
+)
