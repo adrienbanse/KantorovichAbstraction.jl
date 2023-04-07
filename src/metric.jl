@@ -1,11 +1,18 @@
+####
+#   "metric.jl"
+#   Definition of structure MarkovChain
+#   Definition of structure BasicState (state corresponding to one integer)
+#   Definition of structure PartitionState (state corresponding to a vector of integers), 
+#       used for Markov chains that are abstractions where states correspond to partitions
+#   Implementation of Kantorovich measure between Markov chains
+####
+
 abstract type AbstractState end
 id(state::A) where A<:AbstractState = state.id 
 Base.show(io::IO, state::A) where A<:AbstractState = print(io, state.id)
-
 mutable struct BasicState <: AbstractState
     id::Int
 end
-
 mutable struct PartitionState <: AbstractState
     id::Vector{Int}
 end
@@ -30,7 +37,6 @@ P(chain::MarkovChain) = chain.P
 labels(chain::MarkovChain) = chain.labels
 L(chain::MarkovChain) = chain.L
 Base.show(io::IO, chain::MarkovChain) = print(io, "Markov Chain with states $(S(chain))")
-
 function add_state!(
     chain::MarkovChain, 
     state::A, 
@@ -44,11 +50,16 @@ function add_state!(
         append!(chain.labels, [label])
     end
 end
-
 function add_transition!(chain::MarkovChain, from::A, to::A, p::Float64) where A<:AbstractState
     chain.P[from, to] = p
 end
 
+"""
+    compute_words(labels::Vector{Int}, n::Int)
+
+Given a set of "labels" and "n", compute_words computes 
+all the words of length "n" defined on the alphabet "labels"
+"""
 function compute_words(labels::Vector{Int}, n::Int)
     function compute_words_rec!(word_list::Vector{Vector{Vector{Int}}}, k::Int)
         if k >= n return end
@@ -67,6 +78,14 @@ function compute_words(labels::Vector{Int}, n::Int)
     return res
 end
 
+"""
+    compute_probabilities(chain::MarkovChain, n::Int)
+
+Given a Markov chain "chain" and "n", compute_probabilities computes the vectors 
+p^k for k = 1, ..., "n" as defined in [BRAJ23, Equation (2)] in O(|A|^(n+1)|S|^2)
+corresponding to [BRAJ23, Remark 1]
+[BRAJ23] Adrien Banse, Licio Romao, Alessandro Abate, Raphaël M. Jungers, Data-driven abstractions via adaptive refinments and a Kantorovich metric
+"""
 function compute_probabilities(chain::MarkovChain, n::Int) 
     A = typeof(S(chain)[1])
     p_words_total = Vector{Dict{Vector{Int}, Float64}}()
@@ -117,6 +136,12 @@ function compute_probabilities(chain::MarkovChain, n::Int)
     return p_words_total
 end
 
+"""
+    kantorovich(chain_1::MarkovChain, chain_2::MarkovChain, n::Int; p_1::Vector{Dict{Vector{Int}, Float64}} = nothing, p_2::Vector{Dict{Vector{Int}, Float64}} = nothing)
+
+Implementation of [BRAJ23, Algorithm 1]
+[BRAJ23] Adrien Banse, Licio Romao, Alessandro Abate, Raphaël M. Jungers, Data-driven abstractions via adaptive refinments and a Kantorovich metric
+"""
 function kantorovich(
     chain_1::MarkovChain, 
     chain_2::MarkovChain, 

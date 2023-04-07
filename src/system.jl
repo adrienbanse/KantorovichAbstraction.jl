@@ -1,5 +1,10 @@
-abstract type AbstractDynamicalSystem end 
+####
+#   "system.jl"
+#   Definition of structure DynamicalSystem
+#   Definition of structure ControlledDynamicalSystem
+####
 
+abstract type AbstractDynamicalSystem end 
 mutable struct DynamicalSystem{FType<:Function, HType<:Function, OracleType<:Function} <:AbstractDynamicalSystem
     F::FType
     H::HType
@@ -20,7 +25,6 @@ function next!(sys::DynamicalSystem)
     sys.state = (F(sys))(state(sys))
     sys.output = (H(sys))(state(sys))
 end
-
 mutable struct ControlledDynamicalSystem{KType<:Function} <:AbstractDynamicalSystem
     system::DynamicalSystem
     K::KType

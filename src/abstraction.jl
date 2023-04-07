@@ -1,3 +1,15 @@
+####
+#   "abstraction.jl"
+#   Implementation of adaptive refinement method
+####
+
+
+"""
+    refine(sys::A, N::Int, ε::Float64; verbose::Bool = false)
+
+Implementation of [BRAJ23, Algorithm 2]
+[BRAJ23] Adrien Banse, Licio Romao, Alessandro Abate, Raphaël M. Jungers, Data-driven abstractions via adaptive refinments and a Kantorovich metric
+"""
 function refine(sys::A, N::Int, ε::Float64; verbose::Bool = false) where A<:AbstractDynamicalSystem
     n = ceil(Int, log2(1 / ε))
     
