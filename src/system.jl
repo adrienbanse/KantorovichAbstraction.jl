@@ -4,8 +4,9 @@
 #   Definition of structure ControlledDynamicalSystem
 ####
 
-abstract type AbstractDynamicalSystem end 
-mutable struct DynamicalSystem{FType<:Function, HType<:Function, OracleType<:Function} <:AbstractDynamicalSystem
+abstract type AbstractDynamicalSystem end
+mutable struct DynamicalSystem{FType<:Function,HType<:Function,OracleType<:Function} <:
+               AbstractDynamicalSystem
     F::FType
     H::HType
     dim::Int
@@ -25,7 +26,7 @@ function next!(sys::DynamicalSystem)
     sys.state = (F(sys))(state(sys))
     sys.output = (H(sys))(state(sys))
 end
-mutable struct ControlledDynamicalSystem{KType<:Function} <:AbstractDynamicalSystem
+mutable struct ControlledDynamicalSystem{KType<:Function} <: AbstractDynamicalSystem
     system::DynamicalSystem
     K::KType
 end
@@ -41,5 +42,3 @@ function next!(sys::ControlledDynamicalSystem)
     sys.system.state = (F(sys))((K(sys))(state(sys)))
     sys.system.output = (H(sys))(state(sys))
 end
-
-
