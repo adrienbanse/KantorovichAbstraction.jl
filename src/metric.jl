@@ -58,6 +58,7 @@ function add_transition!(
 ) where {A<:AbstractState}
     chain.P[from, to] = p
 end
+Base.length(chain::MarkovChain) = length(chain.μ)
 
 """
     compute_words(labels::Vector{Int}, n::Int)
@@ -164,24 +165,24 @@ function kantorovich(
     p_1 = isnothing(p_1) ? compute_probabilities(chain_1, n) : p_1
     p_2 = isnothing(p_2) ? compute_probabilities(chain_2, n) : p_2
 
-    function kant_rec(k::Int, m::Float64, w::Vector{Int})
-        r = Vector{Float64}()
-        w_new_list = Vector{Vector{Int}}()
-        for l in labels(chain_1)
-            w_new = push!(copy(w), l)
-            push!(w_new_list, w_new)
-            push!(r, min(p_1[k+1][w_new], p_2[k+1][w_new]))
+    function kant_rec!(acc::Vector{Float64}, k::Int, w::Vector{Int})
+        r = min(p_1[k][w], p_2[k][w])   
+        if r == 0
+            return
         end
-        res = (2.0)^(-(k + 1)) * (m - sum(r))
-        if k + 1 == n
-            return res
+        if k == n
+            acc[1] += (2.)^(-k + 1) * r
+            return
         end
-        for i = 1:length(labels(chain_1))
-            if r[i] != 0
-                res += kant_rec(k + 1, r[i], w_new_list[i])
-            end
+        acc[1] += (2.)^(-k) * r
+        for a ∈ labels(chain_1)
+            kant_rec!(acc, k + 1, push!(copy(w), a))
         end
-        return res
     end
-    return kant_rec(0, 1.0, Vector{Int}())
+
+    acc = [0.]
+    for a ∈ labels(chain_1)
+        kant_rec!(acc, 1, [a])
+    end
+    return 1 - acc[1]
 end
